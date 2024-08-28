@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "declaration": true,
+        "outDir": "./main",
+        "esModuleInterop": true,
+        "strict": true,
+        "strictNullChecks": true,
+        "noImplicitAny": true,
+        "downlevelIteration": true
+    },
+    "include": [
+        "./src/**/*",
+        "src/lib/generate-id.ts"
+    ],
+    "exclude": ["node_modules", "main"]
+}
