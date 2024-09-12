@@ -224,8 +224,16 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       throw new TopicNotFoundError(request.topicId);
     }
 
-    await this.server.topics.validatePublishAuth(this, request);
-    this.server.topics.publish(request.topic, request.data, false);
+    try {    
+      await this.server.topics.validatePublishAuth(this, request);
+      this.server.topics.publish(request.topic, request.data, false);
+    }
+    catch(e: any) {
+      this.send(
+        `publication-error.${request.topic}`,
+        { error: safeifyError(e) }
+      );      
+    }
   };
 
   /**
