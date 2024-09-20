@@ -252,7 +252,11 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
     try {
       this.validateNotClosed();
 
+      const startBase: number = Date.now();
       const result: unknown = await this.performMoopsyCall(data);
+      const endBase: number = Date.now();
+
+      const startSideEffects: number = Date.now();
       const sideEffectResults: Array<{sideEffectId:string | number, result:any}> = [];
 
       if(data.sideEffects != null) {
@@ -265,6 +269,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
           });
         }
       }
+      const endSideEffects: number = Date.now();
 
       const responseMessage: MoopsyCallResponseType = {
         mutationResult: result,
@@ -272,6 +277,16 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       };
 
       this.send(`response.${data.callId}`, responseMessage);    
+
+      if(this.server.opts.debugLatency === true && this.server.opts.latencyDataHook != null) {
+        this.server.opts.latencyDataHook({
+          method: data.method,
+          total: endSideEffects - startBase,
+          base: endBase - startBase,
+          sideEffects: endSideEffects - startSideEffects,
+          privateAuth: this.auth?.private ?? null
+        });
+      }      
     }
     catch (err: any) {
       this.send(`response.${data.callId}`, safeifyError(err));    
