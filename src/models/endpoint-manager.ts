@@ -193,6 +193,8 @@ export class EndpointManager<
 
     const auth: AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType> | null = connection.auth;
 
-    return await endpoint.fn(call.params, auth, { connection });
+    return this._server._wrapInstrumentation(call.method, async () => {
+      return await endpoint.fn(call.params, auth, { connection });
+    });
   };
 } 

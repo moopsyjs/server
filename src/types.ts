@@ -23,6 +23,16 @@ export type MoopsyServerOptionsType<PublicAuth extends MoopsyAuthenticationSpec[
   verbose?: boolean
   debugLatency?: boolean
   latencyDataHook?: (fn: { method: string, total: number, base: number, sideEffects: number, privateAuth: PrivateAuth | null }) => void 
+  /**
+   * Usage:
+   * 
+   * ```
+   * const instrumentationHook = (label: string, fn: () => Promise<void>) => {
+   *   Sentry.startSpan({ name: label }, fn);
+   * }
+   * ```
+   */
+  instrumentationHook?: (<T>(label: string, fn: () => T) => T) | null;
 };
 
 export type PubSubConsts = {

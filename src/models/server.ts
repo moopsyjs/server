@@ -87,6 +87,19 @@ export class MoopsyServer<
     this.expressApp.post("/_seamlessjs/http/message", this.handleHTTPMessageRequest);
   }
 
+  public readonly _wrapInstrumentation = <T>(label: string, fn: (...params: any[]) => T): typeof fn => {
+    return (...params: any[]) => {
+      const instrumentationHook: ((label: string, fn: () => T) => T) | null = this.opts.instrumentationHook ?? null;
+      
+      if(instrumentationHook != null) {
+        return instrumentationHook(label, () => fn(...params));
+      }
+      else {
+        return fn(...params);
+      }
+    };
+  };
+
   /**
    * Handles an incoming HTTP request to establish a MoopsyJS connection. Used in the
    * HTTP fallback system when the client deems a WebSocket connection to be unstable.
@@ -96,7 +109,7 @@ export class MoopsyServer<
    * 
    * @returns void
    */
-  private readonly handleHTTPEstablishRequest = async (req: Request, res: Response): Promise<void> => {
+  private readonly handleHTTPEstablishRequest = this._wrapInstrumentation("moopsy::handleHTTPEstablishRequest", async (req: Request, res: Response): Promise<void> => {
     const publicKey: string | null | void | string[] = req.headers["x-seamless-publickey"];
 
     if(!publicKey || typeof publicKey !== "string") {
@@ -128,7 +141,7 @@ export class MoopsyServer<
         connectionId: connection.id
       })
     );
-  };
+  });
 
   /**
    * Handles an incoming HTTP request to send a message to a MoopsyJS connection. Used in
@@ -139,7 +152,7 @@ export class MoopsyServer<
    * 
    * @returns void
    */
-  private readonly handleHTTPMessageRequest = async (req: Request, res: Response): Promise<void> => {
+  private readonly handleHTTPMessageRequest = this._wrapInstrumentation("moopsy::handleHTTPMessageRequest", async (req: Request, res: Response): Promise<void> => {
     const connectionId: string | null | void | string[] = req.headers["x-seamless-connection-id"];
 
     if(!connectionId || typeof connectionId !== "string") {
@@ -173,7 +186,7 @@ export class MoopsyServer<
         res.writeHead(500).end("Internal Server Error");
       }
     }
-  };
+  });
 
   /**
    * Handles a new SocketIO connection being created. This function should determine any
@@ -181,7 +194,7 @@ export class MoopsyServer<
    * 
    * @returns void
    */
-  private readonly handleNewSocketIOConnection = (socket: Socket): void => {
+  private readonly handleNewSocketIOConnection = this._wrapInstrumentation("moopsy:handleNewSocketIOConnection", (socket: Socket): void => {
     const hostname: string | undefined = socket.handshake.headers.host;
 
     // Opinionated, but we require a hostname
@@ -194,7 +207,7 @@ export class MoopsyServer<
     const ip: string = determineIPFromSocket(socket);
 
     this.handleNewConnection(socket, hostname, ip, null);
-  };
+  });
 
   /**
    * Abstractly handles a new connection, whether SocketIO or HTTP, creating a new
@@ -202,7 +215,7 @@ export class MoopsyServer<
    * 
    * @returns The MoopsyConnection instance that was created
    */
-  private handleNewConnection = (rawConnection: Socket | null, hostname: string, ip: string, publicKey: HTTPPublicKey | null): MoopsyConnection<AuthSpec["PublicAuthType"], PrivateAuthType> => {
+  private handleNewConnection = this._wrapInstrumentation("handleNewConnection", (rawConnection: Socket | null, hostname: string, ip: string, publicKey: HTTPPublicKey | null): MoopsyConnection<AuthSpec["PublicAuthType"], PrivateAuthType> => {
     const connection: MoopsyConnection<AuthSpec["PublicAuthType"], PrivateAuthType> = new MoopsyConnection(
       rawConnection, hostname, ip, this, publicKey
     );
@@ -218,7 +231,7 @@ export class MoopsyServer<
     });
 
     return connection;
-  };
+  });
 
   /**
    * Public (consumed by MoopsyConnection) method to emit `onConnectionAuthenticationUpdated`
