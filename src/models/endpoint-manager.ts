@@ -112,7 +112,7 @@ export class EndpointManager<
       throw e;
     }      
 
-    const wrappedHandler: EndpointHandlerType<Blueprint, AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType>> = async (params, auth, extras) => {
+    const wrappedHandler: EndpointHandlerType<Blueprint, AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType>> = this._server._wrapInstrumentation(blueprint.Endpoint, async (params, auth, extras) => {
       const validate: ValidateFunction = ajv.compile<Blueprint["params"]>(blueprint.paramsSchema);
       
       if(!validate(params)) {
@@ -132,7 +132,7 @@ export class EndpointManager<
           throw new InternalServerError();
         }
       }
-    };
+    });
 
     this._endpoints[blueprint.Endpoint] = {
       fn: wrappedHandler,
@@ -193,8 +193,6 @@ export class EndpointManager<
 
     const auth: AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType> | null = connection.auth;
 
-    return this._server._wrapInstrumentation(call.method, async () => {
-      return await endpoint.fn(call.params, auth, { connection });
-    });
+    return await endpoint.fn(call.params, auth, { connection });
   };
 } 
