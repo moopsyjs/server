@@ -189,7 +189,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
    */
   private readonly handlePingEvent = async (): Promise<void> => {
     this.validateNotClosed();
-    this.send("pong", {});
+    this.send("pong", { connectionId: this.id });
   };
 
   /**
@@ -340,6 +340,8 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   };
 
   public readonly forceDisconnect = (): void => {
+    void this.handleWebsocketDisconnect();
+
     if(this.socketSIO == null) {
       return;
     }
