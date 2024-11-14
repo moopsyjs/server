@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import type { MoopsyStream } from "@moopsyjs/core";
 
 /**
  * Beta feature, returns a stream that can be written to even after the initial method has returned.
@@ -7,7 +8,8 @@ import * as crypto from "crypto";
  * - WriteableMoopsyStreams must be top level properties of the response object.
  * - WriteableMoopsyStreams returned as part of side effect responses will be ignored
  */
-export class WriteableMoopsyStream<T> {
+export class WriteableMoopsyStream<T> implements MoopsyStream<T> {
+  public readonly __moopsyStream = true;
   public readonly id: string = crypto.randomBytes(16).toString("hex");
   private readonly backlog: T[] = [];
   private ended: boolean = false;
@@ -19,7 +21,7 @@ export class WriteableMoopsyStream<T> {
     }
   };
   
-  public readonly onData = (data: T): void => {
+  public readonly write = (data: T): void => {
     if (this.ended) {
       throw new Error("Cannot write to a WriteableMoopsyStream that has ended.");
     }
@@ -28,16 +30,16 @@ export class WriteableMoopsyStream<T> {
     this.changed();
   };
   
-  public readonly onEnd = (): void => {
+  public readonly end = (): void => {
     this.ended = true;
     this.changed();
     this.listeners.splice(0);
   };
   
   public readonly read = (): {
-      backlog: T[],
-      ended: boolean
-    } => {
+    backlog: T[],
+    ended: boolean
+  } => {
     return {
       backlog: this.backlog.splice(0),
       ended: this.ended
