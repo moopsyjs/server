@@ -26,6 +26,7 @@ import { isMoopsyError } from "../lib/is-moopsy-error";
 import { TopicNotFoundError } from "./errors/topic-not-found";
 import { ConnectionClosedError } from "./errors/connection-closed";
 import { getJWKFromBase64, importECDSAJWK, validateDataWithSignature } from "../lib/encryption";
+import { WriteableMoopsyStream } from "./writeable-stream";
 
 export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuthType> {
   private closed: boolean = false;
@@ -277,6 +278,18 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       };
 
       this.send(`response.${data.callId}`, responseMessage);    
+
+      if(typeof result === "object" && result instanceof Object) {
+        // If the result is a WriteableMoopsyStream, we listen for changes
+        for(const value of Object.values(result)) {
+          if(value instanceof WriteableMoopsyStream) {
+            this.send(`response.${data.callId}.${value.id}`, value.read());
+            value.onChange(() => {
+              this.send(`response.${data.callId}.${value.id}`, value.read());
+            });
+          }
+        }
+      }
 
       if(this.server.opts.debugLatency === true && this.server.opts.latencyDataHook != null) {
         this.server.opts.latencyDataHook({

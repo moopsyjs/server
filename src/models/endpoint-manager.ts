@@ -17,7 +17,7 @@ import { InvalidRequestError } from "./errors/invalid-request";
 import { InternalServerError } from "./errors/internal-server-error";
 import { TooManyRequestsError } from "./errors/too-many-requests";
 import type { MoopsyConnection } from "./connection";
-import type { AuthTypeGeneric } from "../types";
+import type { AuthTypeGeneric, ReplaceMoopsyStreamWithWritable } from "../types";
 
 type EndpointHandlerExtrasType<ConnectionAuthType extends AuthTypeGeneric<any, any>> = {
   connection: MoopsyConnection<{ PublicAuthType: ConnectionAuthType["public"], AuthRequestType: any }, ConnectionAuthType["private"]>
@@ -25,7 +25,7 @@ type EndpointHandlerExtrasType<ConnectionAuthType extends AuthTypeGeneric<any, a
 
 type EndpointHandlerTypePrivate<Blueprint extends MoopsyBlueprintPlugType, ConnectionAuthType extends AuthTypeGeneric<any, any>> =
   (
-    params: Blueprint["params"],
+    params: ReplaceMoopsyStreamWithWritable<Blueprint["params"]>,
     auth: ConnectionAuthType,
     extras: EndpointHandlerExtrasType<ConnectionAuthType>
   ) => Promise<Blueprint["response"]>
@@ -33,7 +33,7 @@ type EndpointHandlerTypePrivate<Blueprint extends MoopsyBlueprintPlugType, Conne
 
 type EndpointHandlerTypePublic<Blueprint extends MoopsyBlueprintPlugType, ConnectionAuthType extends AuthTypeGeneric<any, any>> =
   (
-    params: Blueprint["params"],
+    params: ReplaceMoopsyStreamWithWritable<Blueprint["params"]>,
     auth: ConnectionAuthType | null,
     extras: EndpointHandlerExtrasType<ConnectionAuthType>
   ) => Promise<Blueprint["response"]>
@@ -41,7 +41,7 @@ type EndpointHandlerTypePublic<Blueprint extends MoopsyBlueprintPlugType, Connec
 
 type EndpointHandlerType<Blueprint extends MoopsyBlueprintPlugType, ConnectionAuthType extends AuthTypeGeneric<any, any>> =
   (
-    params: Blueprint["params"],
+    params: ReplaceMoopsyStreamWithWritable<Blueprint["params"]>,
     auth: any,
     extras: EndpointHandlerExtrasType<ConnectionAuthType>
   ) => Promise<Blueprint["response"]>
@@ -112,7 +112,7 @@ export class EndpointManager<
       throw e;
     }      
 
-    const wrappedHandler: EndpointHandlerType<Blueprint, AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType>> = this._server._wrapInstrumentation(blueprint.Endpoint, async (params, auth, extras) => {
+    const wrappedHandler: EndpointHandlerType<Blueprint, AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType>> = this._server._wrapInstrumentation(blueprint.Endpoint, async (params: ReplaceMoopsyStreamWithWritable<Blueprint["params"]>, auth, extras) => {
       const validate: ValidateFunction = ajv.compile<Blueprint["params"]>(blueprint.paramsSchema);
       
       if(!validate(params)) {

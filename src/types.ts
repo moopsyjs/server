@@ -1,6 +1,8 @@
+
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { MoopsyAuthenticationSpec, MoopsyPublishToTopicEventData, MoopsySubscribeToTopicEventData } from "@moopsyjs/core";
+import { MoopsyAuthenticationSpec, MoopsyPublishToTopicEventData, MoopsyStream, MoopsySubscribeToTopicEventData } from "@moopsyjs/core";
 import { MoopsyConnection } from "./models/connection";
+import { WriteableMoopsyStream } from "./models/writeable-stream";
 
 export type MoopsyPubSubTopicPublishHandler<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuthType> = (data: MoopsyPublishToTopicEventData, auth: MoopsyConnection<AuthSpec, PrivateAuthType>["auth"] | null) => Promise<boolean>;
 export type MoopsyPubSubTopicSubscriptionHandler<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuthType> = (data: MoopsySubscribeToTopicEventData, auth: MoopsyConnection<AuthSpec, PrivateAuthType>["auth"] | null, connection: MoopsyConnection<any, any>) => Promise<boolean>;
@@ -94,3 +96,7 @@ export interface HTTPPublicKey {
   key: string;
   type: "ecdsa" | "rsa";
 }
+
+export type ReplaceMoopsyStreamWithWritable<T> = {
+  [K in keyof T]: T[K] extends MoopsyStream<infer U> ? WriteableMoopsyStream<U> : T[K];
+};
