@@ -54,6 +54,7 @@ type EndpointType<
   fn: EndpointHandlerType<any, AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType>>;
   requireLogin: boolean;
   rateLimiting: RateLimitingConfigType | null;
+  blueprint: MoopsyBlueprintConstsType;
 }
 
 type EndpointsType<
@@ -112,32 +113,11 @@ export class EndpointManager<
       throw e;
     }      
 
-    const wrappedHandler: EndpointHandlerType<Blueprint, AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType>> = this._server._wrapInstrumentation(blueprint.Endpoint, async (params: ReplaceMoopsyStreamWithWritable<Blueprint["params"]>, auth, extras) => {
-      const validate: ValidateFunction = ajv.compile<Blueprint["params"]>(blueprint.paramsSchema);
-      
-      if(!validate(params)) {
-        this._server.verbose("Params Type Guard Rejection", EJSON.stringify(params), blueprint, validate.errors);
-        throw new InvalidRequestError();
-      }
-
-      try {
-        return await handler(params, auth, extras);
-      }
-      catch(e: any) {
-        if(isMoopsyError(e)) {
-          throw e;
-        }
-        else {
-          console.error(`[MoopsyServer] Internal Server Error calling "${blueprint.Endpoint}"`, e);
-          throw new InternalServerError();
-        }
-      }
-    });
-
     this._endpoints[blueprint.Endpoint] = {
-      fn: wrappedHandler,
+      fn: handler,
       requireLogin: !blueprint.isPublic,
-      rateLimiting: blueprint.RateLimitingConfig ?? null
+      rateLimiting: blueprint.RateLimitingConfig ?? null,
+      blueprint
     };
   }
 
@@ -193,6 +173,26 @@ export class EndpointManager<
 
     const auth: AuthTypeGeneric<AuthSpec["PublicAuthType"], PrivateAuthType> | null = connection.auth;
 
-    return await endpoint.fn(call.params, auth, { connection });
+    const validate: ValidateFunction = ajv.compile<ReplaceMoopsyStreamWithWritable<any>>(endpoint.blueprint.paramsSchema);
+      
+    if(!validate(call.params)) {
+      this._server.verbose("Params Type Guard Rejection", EJSON.stringify(call.params), endpoint.blueprint, validate.errors);
+      throw new InvalidRequestError();
+    }
+
+    try {
+      // Params come in untyped, there's no way to type them effectively so we must use as
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return await endpoint.fn(call.params as ReplaceMoopsyStreamWithWritable<any>, auth, { connection });
+    }
+    catch(e: any) {
+      if(isMoopsyError(e)) {
+        throw e;
+      }
+      else {
+        console.error(`[MoopsyServer] Internal Server Error calling "${endpoint.blueprint.Endpoint}"`, e);
+        throw new InternalServerError();
+      }
+    }
   };
 } 
