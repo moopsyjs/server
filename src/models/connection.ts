@@ -27,11 +27,12 @@ import { TopicNotFoundError } from "./errors/topic-not-found";
 import { ConnectionClosedError } from "./errors/connection-closed";
 import { getJWKFromBase64, importECDSAJWK, validateDataWithSignature } from "../lib/encryption";
 import { WriteableMoopsyStream } from "./writeable-stream";
+import WS, { WebSocket } from "ws";
 
 export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuthType> {
   private closed: boolean = false;
   private pingTimeout: NodeJS.Timeout | null = null;
-  private readonly socketSIO: Socket | null;
+  private readonly socketSIO: Socket | WebSocket | null;
   private readonly emitter: EventEmitter = new EventEmitter();
   
   public auth: AuthType<AuthSpec["PublicAuthType"], PrivateAuthType> | null = null;
@@ -42,7 +43,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   public readonly rateLimiters: Record<string, RateLimiter> = {};
   public readonly server: MoopsyServer<AuthSpec["PublicAuthType"], PrivateAuthType>;
 
-  public constructor(rawConnection: Socket | null, hostname: string, ip: string, server: MoopsyServer<AuthSpec["PublicAuthType"], PrivateAuthType>, private publicKey: HTTPPublicKey | null) {
+  public constructor(rawConnection: Socket | WebSocket | null, hostname: string, ip: string, server: MoopsyServer<AuthSpec["PublicAuthType"], PrivateAuthType>, private publicKey: HTTPPublicKey | null) {
     this.ip = ip; 
     this.server = server;
     this.hostname = hostname;
@@ -53,7 +54,9 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
     this.resetTimeout();
 
     if(this.socketSIO != null) {
-      this.socketSIO.on("message", this.handleRawIncomingMessageFromClient);
+      this.socketSIO.on("message", (evt: string | WS.RawData) => {
+        void this.handleRawIncomingMessageFromClient(evt.toString());
+      });
       this.socketSIO.on("disconnect", this.handleWebsocketDisconnect);
     }
   }
@@ -341,7 +344,12 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       const raw: string = EJSON.stringify({ event, data });
 
       if(this.socketSIO != null) {
-        this.socketSIO.write(raw);
+        if("write" in this.socketSIO) {
+          this.socketSIO.write(raw);
+        }
+        else {
+          this.socketSIO.send(raw);
+        }
       }
       else {
         this.outbox.push(raw);
@@ -359,7 +367,12 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       return;
     }
 
-    this.socketSIO.disconnect(true);
+    if("disconnect" in this.socketSIO) {
+      this.socketSIO.disconnect(true);
+    }
+    else {
+      this.socketSIO.close();
+    }
   };
 
   public readonly onDisconnect = (cb: () => void): void => {

@@ -2,6 +2,7 @@
  * MoopsyJS used to be called SeamlessJS, we keep the old URL for backwards compatability
  */
 
+import WebSocket, { WebSocketServer } from "ws";
 import http from "http";
 import EJSON from "ejson";
 import EventEmitter from "events";
@@ -36,6 +37,7 @@ export class MoopsyServer<
 >{
   private readonly httpServer: http.Server;
   private readonly socketIOServer: SocketIOServer;
+  private readonly wss: WebSocketServer;
   public readonly serverId: string;
   public readonly connections: Record<string, MoopsyConnection<AuthSpec["PublicAuthType"], PrivateAuthType>> = {};
   public readonly __iv = new EventEmitter(); // Used by packages that install onto MoopsyServer
@@ -72,11 +74,13 @@ export class MoopsyServer<
     registerStatusEndpoint(this.expressApp);
     this.httpServer = this.expressApp.listen(this.opts.port);
     this.socketIOServer = new SocketIOServer(this.httpServer, SOCKETIO_SERVER_CONFIG);
+    this.wss = new WebSocketServer({ server: this.httpServer, path: "/moopsy_ws" });
 
     /**
      * Establish handlers for Moopsy over SocketIO
      */
     this.socketIOServer.on("connection", this.handleNewSocketIOConnection);
+    this.wss.on("connection", this.handleNewWSConnection);
     
     /**
      * Establish and configure handlers for Moopsy over HTTP
@@ -205,6 +209,21 @@ export class MoopsyServer<
     }
 
     const ip: string = determineIPFromSocket(socket);
+
+    this.handleNewConnection(socket, hostname, ip, null);
+  });
+
+  private readonly handleNewWSConnection = this._wrapInstrumentation("moopsy:handleNewWSConnection", (socket: WebSocket, req: http.IncomingMessage): void => {
+    const hostname: string | undefined = req.headers.host;
+
+    // Opinionated, but we require a hostname
+    if(hostname == null) {
+      socket.send("error:missing-hostname");
+      socket.close();
+      return;
+    }
+
+    const ip: string = req.headers["x-forwarded-for"]?.toString() ?? req.socket.remoteAddress ?? "unknown";
 
     this.handleNewConnection(socket, hostname, ip, null);
   });
