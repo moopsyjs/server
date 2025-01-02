@@ -74,7 +74,17 @@ export class MoopsyServer<
     registerStatusEndpoint(this.expressApp);
     this.httpServer = this.expressApp.listen(this.opts.port);
     this.socketIOServer = new SocketIOServer(this.httpServer, SOCKETIO_SERVER_CONFIG);
-    this.wss = new WebSocketServer({ server: this.httpServer, path: "/moopsy_ws" });
+    this.wss = new WebSocketServer({ noServer: true });
+
+    this.httpServer.on("upgrade", (request, socket, head) => {
+      const pathname: string = new URL(request.url ?? "", `http://${request.headers.host}`).pathname;
+
+      if (pathname === "/moopsy_ws") {
+        this.wss.handleUpgrade(request, socket, head, (ws) => {
+          this.wss.emit("connection", ws, request);
+        });
+      }
+    });
 
     /**
      * Establish handlers for Moopsy over SocketIO

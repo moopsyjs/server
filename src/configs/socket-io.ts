@@ -9,5 +9,6 @@ export const SOCKETIO_SERVER_CONFIG: Partial<ServerOptions> = {
   cors: {
     origin: true,
     methods: ["GET", "POST"],
-  }
+  },
+  destroyUpgrade: false,
 };
