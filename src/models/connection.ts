@@ -322,7 +322,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       console.error(e);
     }
 
-    this.forceDisconnect(0, "ping-timeout");
+    this.forceDisconnect(3999, "ping-timeout");
   };
 
   /**

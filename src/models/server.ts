@@ -243,7 +243,7 @@ export class MoopsyServer<
     // Opinionated, but we require a hostname
     if(hostname == null) {
       socket.send("error:missing-hostname");
-      socket.close();
+      socket.close(3998, "missing-hostname");
       return;
     }
 
