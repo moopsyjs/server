@@ -90,7 +90,21 @@ export class MoopsyServer<
      * Establish handlers for Moopsy over SocketIO
      */
     this.socketIOServer.on("connection", this.handleNewSocketIOConnection);
-    this.wss.on("connection", this.handleNewWSConnection);
+    this.wss.on("connection", (connection, request) => {
+      this.handleNewWSConnection(connection, request);
+
+      connection.on("ping", () => {
+        connection.pong();
+      });
+    });
+
+    setInterval(() => {
+      for(const ws of this.wss.clients) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.ping();
+        }
+      }
+    }, 10_000);
     
     /**
      * Establish and configure handlers for Moopsy over HTTP
