@@ -322,7 +322,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       console.error(e);
     }
 
-    this.forceDisconnect();
+    this.forceDisconnect(0, "ping-timeout");
   };
 
   /**
@@ -360,7 +360,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
     }
   };
 
-  public readonly forceDisconnect = (): void => {
+  public readonly forceDisconnect = (code: number, reason: string): void => {
     void this.handleWebsocketDisconnect();
 
     if(this.socketSIO == null) {
@@ -371,7 +371,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       this.socketSIO.disconnect(true);
     }
     else {
-      this.socketSIO.close();
+      this.socketSIO.close(code, reason);
     }
   };
 
