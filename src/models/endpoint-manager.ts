@@ -114,7 +114,7 @@ export class EndpointManager<
     }      
 
     this._endpoints[blueprint.Endpoint] = {
-      fn: handler,
+      fn: this._server._wrapInstrumentation(blueprint.Endpoint, handler),
       requireLogin: !blueprint.isPublic,
       rateLimiting: blueprint.RateLimitingConfig ?? null,
       blueprint
