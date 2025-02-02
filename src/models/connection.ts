@@ -1,10 +1,8 @@
 import EJSON from "ejson";
-import { Socket } from "socket.io";
 import { EventEmitter } from "events";
 import {
   MoopsyError,
   MoopsyCallType,
-  IncomingRestRequestType,
   MoopsyCallResponseType,
   MoopsyAuthenticationSpec,
   MoopsyPublishToTopicEventData,
@@ -25,14 +23,13 @@ import { PubSubSubscription } from "./pubsub-subscription";
 import { isMoopsyError } from "../lib/is-moopsy-error";
 import { TopicNotFoundError } from "./errors/topic-not-found";
 import { ConnectionClosedError } from "./errors/connection-closed";
-import { getJWKFromBase64, importECDSAJWK, validateDataWithSignature } from "../lib/encryption";
 import { WriteableMoopsyStream } from "./writeable-stream";
 import WS, { WebSocket } from "ws";
 
 export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuthType> {
   private closed: boolean = false;
   private pingTimeout: NodeJS.Timeout | null = null;
-  private readonly socketSIO: Socket | WebSocket | null;
+  private readonly socketSIO: WebSocket;
   private readonly emitter: EventEmitter = new EventEmitter();
   
   public auth: AuthType<AuthSpec["PublicAuthType"], PrivateAuthType> | null = null;
@@ -43,13 +40,14 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   public readonly rateLimiters: Record<string, RateLimiter> = {};
   public readonly server: MoopsyServer<AuthSpec["PublicAuthType"], PrivateAuthType>;
 
-  public constructor(rawConnection: Socket | WebSocket | null, hostname: string, ip: string, server: MoopsyServer<AuthSpec["PublicAuthType"], PrivateAuthType>, private publicKey: HTTPPublicKey | null) {
+  public constructor(rawConnection: WebSocket, hostname: string, ip: string, server: MoopsyServer<AuthSpec["PublicAuthType"], PrivateAuthType>, private publicKey: HTTPPublicKey | null) {
     this.ip = ip; 
     this.server = server;
     this.hostname = hostname;
     this.socketSIO = rawConnection;
     this.id = generateId(16) + Date.now().toString() + ip;
     this.server._emitter.emit("onConnectionOpened", this);
+    this.server.emit("connection-opened", this);
     
     this.resetTimeout();
 
@@ -67,42 +65,6 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
     }
   };
 
-  private readonly validatePublicKey = async (data: string, signature: string): Promise<boolean> => {
-    if(this.publicKey == null) {
-      throw new MoopsyError(400, "No public key was specified, client is likely pre v4");
-    }
-
-    try {
-      if(this.publicKey == null) {
-        throw new MoopsyError(400, "No public key was specified");
-      }
-
-      const jwk: JsonWebKey = getJWKFromBase64(this.publicKey.key);
-      const key: CryptoKey = await importECDSAJWK(jwk);
-
-      return await validateDataWithSignature(data, signature, key);
-    }
-    catch(e) {
-      return false;
-    }
-  };
-
-  public readonly handleIncomingHTTPRequest = async (incoming: IncomingRestRequestType): Promise<any> => {
-    this.validateNotClosed();
-    
-    const valid: boolean = await this.validatePublicKey(incoming.data, incoming.signature);
-
-    if(!valid) {
-      throw new MoopsyError(400, `Invalid signature (${this.publicKey?.type.toUpperCase()})`);
-    }
-
-    if(incoming.data === "check-outbox") {
-      return await this.handleOutboxCheckRequest();
-    }
-
-    await this.handleRawIncomingMessageFromClient(incoming.data);
-  };
-
   /**
    * Handles the client disconnecting
    */
@@ -115,8 +77,9 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
 
     this.emitter.emit("disconnect");
     this.server._emitter.emit("onConnectionClosed", this);
+    this.server.emit("connection-closed", this);
 
-    this.server.verbose("SocketIO Connection Disconnected", {
+    this.server.verbose("Connection Closed", {
       ip: this.ip,
       id: this.id,
       authPublic: this.auth?.public ?? null
@@ -329,6 +292,8 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
    * Reset the ping timeout
    */
   private readonly resetTimeout = (): void => {
+    this.validateNotClosed();
+
     if(this.pingTimeout != null) {
       clearTimeout(this.pingTimeout);
     }
@@ -342,18 +307,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   public readonly send = (event: MoopsyRawServerToClientMessageEventType, data = {}): void => {
     try {
       const raw: string = EJSON.stringify({ event, data });
-
-      if(this.socketSIO != null) {
-        if("write" in this.socketSIO) {
-          this.socketSIO.write(raw);
-        }
-        else {
-          this.socketSIO.send(raw);
-        }
-      }
-      else {
-        this.outbox.push(raw);
-      }
+      this.socketSIO.send(raw);
     }
     catch (e: any) {
       this.server.reportError("Failed to send", e, { event, data });
@@ -367,23 +321,10 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       return;
     }
 
-    if("disconnect" in this.socketSIO) {
-      this.socketSIO.disconnect(true);
-    }
-    else {
-      this.socketSIO.close(code, reason);
-    }
+    this.socketSIO.close(code, reason);
   };
 
   public readonly onDisconnect = (cb: () => void): void => {
     this.emitter.on("disconnect", cb);
-  };
-
-  private readonly outbox: string[] = [];
-
-  public readonly handleOutboxCheckRequest = (): Promise<string[]> => {
-    return new Promise((resolve) => {
-      resolve(this.outbox.splice(0));
-    });
   };
 }

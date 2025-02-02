@@ -14,6 +14,16 @@ export class WriteableMoopsyStream<T> implements MoopsyStream<T> {
   private readonly backlog: T[] = [];
   private ended: boolean = false;
   private readonly listeners: (() => void)[] = [];
+  private readonly timeout: NodeJS.Timeout;
+
+  public constructor(options?: { timeout?: number; }) {
+    const timeoutDuration: number = options?.timeout ?? 60_000;
+
+    this.timeout = setTimeout(() => {
+      console.warn("WriteableMoopsyStream timed out, ending stream", Error().stack);
+      this.end();
+    }, timeoutDuration);
+  }
 
   private readonly changed = (): void => {
     for (const listener of this.listeners) {
@@ -31,6 +41,8 @@ export class WriteableMoopsyStream<T> implements MoopsyStream<T> {
   };
   
   public readonly end = (): void => {
+    clearTimeout(this.timeout);
+
     this.ended = true;
     this.changed();
     this.listeners.splice(0);

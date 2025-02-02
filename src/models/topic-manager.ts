@@ -86,6 +86,8 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
     if(index !== -1) {
       this._topicSubscriptions[sub.topic].splice(index, 1);
     }
+
+    this.server.emit("pubsub-subscription-deleted", sub);
   };
 
   public readonly subscribe = async (connection: MoopsyConnection<AuthSpec, PrivateAuthType>, request: MoopsySubscribeToTopicEventData): Promise<void> =>{
@@ -115,10 +117,7 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
     
     connection.pubSubSubscriptions.push(sub);
     this._topicSubscriptions[request.topic].push(sub);
-    this.server._emitter.emit("onSuccessfulSubscription", {
-      topic: request.topic,
-      subscription: sub
-    });
+    this.server.emit("pubsub-subscription-created", sub);
 
     this.server.verbose("PubSub Subscription Created", {topic: request.topic, ip: connection.ip, subId: sub.id, publicAuth: connection.auth?.public ?? null});
   };

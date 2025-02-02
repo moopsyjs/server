@@ -113,12 +113,12 @@ export class EndpointManager<
       throw e;
     }      
 
-    this._endpoints[blueprint.Endpoint] = {
+    this._endpoints[blueprint.Endpoint] = Object.defineProperty({
       fn: this._server._wrapInstrumentation(blueprint.Endpoint, handler),
       requireLogin: !blueprint.isPublic,
       rateLimiting: blueprint.RateLimitingConfig ?? null,
       blueprint
-    };
+    }, "name", { value: "MoopsyEndpoint" });
   }
 
   /**
