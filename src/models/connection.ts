@@ -19,7 +19,7 @@ import { RateLimiter } from "../lib/rate-limiter";
 import { AuthType, HTTPPublicKey } from "../types";
 import { safeifyError } from "../lib/safeify-error";
 import { UnsupportedError } from "./errors/unsupported";
-import { PubSubSubscription } from "./pubsub-subscription";
+import type { PubSubSubscription } from "./pubsub-subscription";
 import { isMoopsyError } from "../lib/is-moopsy-error";
 import { TopicNotFoundError } from "./errors/topic-not-found";
 import { ConnectionClosedError } from "./errors/connection-closed";
@@ -36,7 +36,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   public readonly ip: string;
   public readonly id: string;
   public readonly hostname: string;
-  public readonly pubSubSubscriptions: PubSubSubscription[] = [];
+  public readonly pubSubSubscriptions: Array<WeakRef<PubSubSubscription>> = [];
   public readonly rateLimiters: Record<string, RateLimiter> = {};
   public readonly server: MoopsyServer<AuthSpec["PublicAuthType"], PrivateAuthType>;
 
@@ -71,8 +71,11 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   private readonly handleWebsocketDisconnect = async (): Promise<void> => {
     this.closed = true;    
 
-    for(const sub of this.pubSubSubscriptions) {
-      this.server.topics.unsubscribe(sub);
+    for(const subRef of this.pubSubSubscriptions) {
+      const sub: PubSubSubscription | void = subRef.deref();
+      if(sub != null) {
+        this.server.topics.unsubscribe(sub);
+      }
     }    
 
     this.emitter.emit("disconnect");
