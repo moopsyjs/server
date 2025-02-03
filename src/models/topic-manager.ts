@@ -8,6 +8,29 @@ import { PubSubSubscription } from "./pubsub-subscription";
 import { MoopsyServer } from "./server";
 import { generateId } from "../lib/generate-id";
 
+/**
+ * Interface that can be used to publish data to a topic
+ */
+class PubSubTopicInterface<PSB extends PubSubTyping>{
+  public constructor(
+    private readonly server: MoopsyServer<any, any>,
+    private readonly bp: MoopsyTopicSpecConstsType,
+    private readonly topicManager: TopicManager<any, any>,
+  ) {}
+
+  public readonly publish = (message: PSB["MessageType"], skipIvEmit: boolean = false): void => {
+    this.topicManager.publish(this.bp.TopicID, message, skipIvEmit);
+  };
+
+  public readonly publishMultiple = (events: Array<PSB["MessageType"]>, skipIvEmit: boolean = false): void => {
+    for(const message of events) {
+      this.publish(message, skipIvEmit);
+    }
+  };
+}
+
+export type { PubSubTopicInterface };
+
 export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuthType> {
   /**
    * Internal map of topic registrations
@@ -115,7 +138,9 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
       request.id ?? generateId(16)
     );
     
-    connection.pubSubSubscriptions.push(sub);
+    connection.pubSubSubscriptions.push(
+      new WeakRef(sub)
+    );
     this._topicSubscriptions[request.topic].push(sub);
     this.server.emit("pubsub-subscription-created", sub);
 
