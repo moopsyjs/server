@@ -17,5 +17,8 @@ export {
 export type {
   MoopsyConnection
 } from "./models/connection";
+export type {
+  PubSubTopicInterface
+} from "./models/topic-manager";
 export * from "./types";
 
