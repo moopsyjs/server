@@ -330,4 +330,8 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   public readonly onDisconnect = (cb: () => void): void => {
     this.emitter.on("disconnect", cb);
   };
+
+  public toJSON(): object {
+    return { id: this.id, ip: this.ip, hostname: this.hostname };
+  }
 }

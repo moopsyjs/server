@@ -63,6 +63,9 @@ export class MoopsyServer<
   
   public constructor(
     opts: MoopsyServerOptionsType<AuthSpec["PublicAuthType"], PrivateAuthType>,
+    /**
+     * @deprecated use server.registerAuthHandler() instead
+     */
     callbacks: ServerCallbacksType<AuthSpec, PrivateAuthType>,
   ) {
     /**
@@ -103,6 +106,18 @@ export class MoopsyServer<
       }
     }, 10_000);
   }
+
+  /**
+   * Registers a handler for handling authentication requests. If you do not register
+   * one clients will not be able to authenticate.
+   * 
+   * This handler should do something like validate a token, NOT validate a username
+   * and password. Instead, setup a method that handles the initial process and returns
+   * some sort of token, and use that token to authenticate your Moopsy connection.
+   */
+  public readonly registerAuthHandler = (authHandler: Exclude<ServerCallbacksType<AuthSpec, PrivateAuthType>["handleAuthLogin"], undefined>): void => {
+    this.callbacks.handleAuthLogin = authHandler;
+  };
 
   public readonly _wrapInstrumentation = <T>(label: string, fn: (...params: any[]) => T): typeof fn => {
     return (...params: any[]) => {

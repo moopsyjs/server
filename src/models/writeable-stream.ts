@@ -43,9 +43,16 @@ export class WriteableMoopsyStream<T> implements MoopsyStream<T> {
   public readonly end = (): void => {
     clearTimeout(this.timeout);
 
-    this.ended = true;
+    // Fire a final change event to ensure that any remaining data is sent
     this.changed();
+    
+    this.ended = true;
+
+    // Purge listeners
     this.listeners.splice(0);
+    
+    // Purge backlog
+    this.backlog.splice(0);
   };
   
   public readonly read = (): {
