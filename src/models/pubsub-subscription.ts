@@ -1,3 +1,4 @@
+import { MoopsySubscribeToTopicEventData } from "@moopsyjs/core/main";
 import { MoopsyConnection } from "./connection";
 
 export class PubSubSubscription {
@@ -5,6 +6,7 @@ export class PubSubSubscription {
 
   public constructor (
     public readonly connection: MoopsyConnection<any, any>,
+    public readonly options: MoopsySubscribeToTopicEventData,
     public readonly topic: string,
     public readonly id: string
   ) {

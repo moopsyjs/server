@@ -18,13 +18,13 @@ class PubSubTopicInterface<PSB extends PubSubTyping>{
     private readonly topicManager: TopicManager<any, any>,
   ) {}
 
-  public readonly publish = (message: PSB["MessageType"], skipIvEmit: boolean = false): void => {
-    this.topicManager.publish(this.bp.TopicID, message, skipIvEmit);
+  public readonly publish = async (message: PSB["MessageType"], skipIvEmit: boolean = false): Promise<void> => {
+    await this.topicManager.publish(this.bp.TopicID, message, skipIvEmit);
   };
 
-  public readonly publishMultiple = (events: Array<PSB["MessageType"]>, skipIvEmit: boolean = false): void => {
+  public readonly publishMultiple = async (events: Array<PSB["MessageType"]>, skipIvEmit: boolean = false): Promise<void> => {
     for(const message of events) {
-      this.publish(message, skipIvEmit);
+      await this.publish(message, skipIvEmit);
     }
   };
 }
@@ -41,7 +41,27 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
    */
   private readonly _topicSubscriptions: Record<string, Array<PubSubSubscription>> = {};
 
-  public constructor(private server: MoopsyServer<AuthSpec, PrivateAuthType>) {}
+  public constructor(private server: MoopsyServer<AuthSpec, PrivateAuthType>) {
+    this.server.__iv.on("publish-internal", async (data: any) => {
+      // TODO: Not the most elegant solution but we need to better standardize inter-server communication
+      if(
+        data != null
+        && typeof data === "object"
+        && "revokeSubscriptionsForUser" in data
+        && data.revokeSubscriptionsForUser != null
+        && typeof data.revokeSubscriptionsForUser === "object"
+        && "userId" in data.revokeSubscriptionsForUser
+        && "topic" in data.revokeSubscriptionsForUser
+        && typeof data.revokeSubscriptionsForUser.userId === "string"
+        && typeof data.revokeSubscriptionsForUser.topic === "string"
+      ) {
+        await this.revokeSubscriptionsForUser({
+          userId: data.revokeSubscriptionsForUser.userId,
+          topic: data.revokeSubscriptionsForUser.topic
+        });
+      }
+    });
+  }
 
   /**
    * Publish a message to a given topic.
@@ -50,11 +70,23 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
    * @param message 
    * @param skipIvEmit Skips publishing the event on the IV, which distributes the event to other servers
    */
-  public readonly publish = (topic: string, message: any, skipIvEmit: boolean = false): void => {
+  public readonly publish = async (topic: string, message: any, skipIvEmit: boolean = false): Promise<void> => {
     if (topic in this._topicSubscriptions && this._topicSubscriptions[topic] && Array.isArray(this._topicSubscriptions[topic])) {
       const subscriptions: PubSubSubscription[] = this._topicSubscriptions[topic];
 
       for (const subscription of subscriptions) {
+        if(this.server.opts.reauthenticateSubscriptionsOnEachPush === true) {
+          const authenticated: boolean = await this.map[subscription.options.topicId].subscribeHandler(subscription.options, subscription.connection.auth, subscription.connection);
+
+          if(!authenticated) {
+            /**
+             * The user has lost access, revoke the subscription and continue
+             */
+            this.unsubscribe(subscription);
+            continue;
+          }
+        }
+
         subscription.publish(message);
       }
     }
@@ -64,9 +96,9 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
     }
   };
 
-  public readonly publishMultiple = (events: Array<{ topic: string, message: any }>): void => {
+  public readonly publishMultiple = async (events: Array<{ topic: string, message: any }>): Promise<void> => {
     for( const { topic, message } of events) {
-      this.publish(topic, message, false);
+      await this.publish(topic, message, false);
     }
   };
 
@@ -113,6 +145,35 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
     this.server.emit("pubsub-subscription-deleted", sub);
   };
 
+  /**
+   * Revokes all subscriptions for a user with the given `usedId` for
+   * the `topic` (topicname) specified.
+   * 
+   * Note: In order for this to work you must set `userId` (added in 1.5.3)
+   * in your registerAuthHandler callback.
+   * 
+   * Works with multiple servers via __iv
+   */
+  public readonly revokeSubscriptionsForUser = async (params: {
+    userId: string;
+    topic: string;
+  }): Promise<void> => {
+    if(this._topicSubscriptions[params.topic] != null) {
+      for(const sub of this._topicSubscriptions[params.topic]) {
+        if(sub.connection.userId === params.userId) {
+          this.unsubscribe(sub);
+        }
+      }
+    }
+
+    this.server.__iv.emit("revokeSubscriptionsForUser", {
+      revokeSubscriptionsForUser: {
+        userId: params.userId,
+        topic: params.topic
+      }
+    });
+  };
+
   public readonly subscribe = async (connection: MoopsyConnection<AuthSpec, PrivateAuthType>, request: MoopsySubscribeToTopicEventData): Promise<void> =>{
     if (!this._topicSubscriptions[request.topic]) this._topicSubscriptions[request.topic] = [];
 
@@ -134,6 +195,7 @@ export class TopicManager<AuthSpec extends MoopsyAuthenticationSpec, PrivateAuth
 
     const sub: PubSubSubscription = new PubSubSubscription(
       connection,
+      request,
       request.topic,
       request.id ?? generateId(16)
     );

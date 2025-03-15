@@ -33,6 +33,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
   private readonly emitter: EventEmitter = new EventEmitter();
   
   public auth: AuthType<AuthSpec["PublicAuthType"], PrivateAuthType> | null = null;
+  public userId: string | null = null;
   public readonly ip: string;
   public readonly id: string;
   public readonly hostname: string;
@@ -135,6 +136,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
       const authResponse: AuthType<AuthSpec["PublicAuthType"], PrivateAuthType> = await this.server.callbacks.handleAuthLogin(data, this);
 
       this.auth = authResponse;
+      this.userId = authResponse?.userId ?? null;
 
       this.send(
         MoopsyRawServerToClientMessageEventEnum.AUTH_SUCCESS,
@@ -196,7 +198,7 @@ export class MoopsyConnection<AuthSpec extends MoopsyAuthenticationSpec, Private
 
     try {    
       await this.server.topics.validatePublishAuth(this, request);
-      this.server.topics.publish(request.topic, request.data, false);
+      await this.server.topics.publish(request.topic, request.data, false);
     }
     catch(e: any) {
       this.send(

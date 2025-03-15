@@ -35,6 +35,19 @@ export type MoopsyServerOptionsType<PublicAuth extends MoopsyAuthenticationSpec[
    * ```
    */
   instrumentationHook?: (<T>(label: string, fn: () => T) => T) | null;
+
+  /**
+   * default: `false`
+   * 
+   * As a stronger security measure, re-runs authentication on every push to a topic.
+   * 
+   * This is useful for ensuring that a user is still authenticated when they are, without
+   * having to ensure that you maintain logic to revoke subscriptions when a user loses access.
+   * 
+   * This will add overhead to every single push. Ensure that your pubsub authentication functions
+   * are efficient and fast. For example, utilize cacheing rather than direct DB access.
+   */
+  reauthenticateSubscriptionsOnEachPush?: boolean;
 };
 
 export type PubSubConsts = {
@@ -49,7 +62,8 @@ export type PubSubTyping = {
 
 export type AuthType<Pub, Prv> = {
   public: Pub,
-  private: Prv
+  private: Prv,
+  userId?: string
 }
 
 export type AuthTypeGeneric<Pub, Prv> = AuthType<Pub, Prv>;
