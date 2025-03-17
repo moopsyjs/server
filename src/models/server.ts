@@ -99,12 +99,10 @@ export class MoopsyServer<
     this.wss.on("connection", this.handleNewWSConnection);
 
     setInterval(() => {
-      for(const ws of this.wss.clients) {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.ping();
-        }
+      for(const id in this.connections) {
+        this.connections[id].send("pong", {});
       }
-    }, 10_000);
+    }, 15_000);
   }
 
   /**
