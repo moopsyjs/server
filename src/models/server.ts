@@ -100,7 +100,7 @@ export class MoopsyServer<
 
     setInterval(() => {
       for(const id in this.connections) {
-        this.connections[id].send("pong", {});
+        this.connections[id].send("ping", {});
       }
     }, 15_000);
   }
